@@ -1,0 +1,3 @@
+[submodule "fpu_ss"]
+	path = fpu_ss
+	url = https://github.com/pulp-platform/fpu_ss.git
