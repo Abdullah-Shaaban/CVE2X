@@ -20,6 +20,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Engineer:       Michael Platzer - michael.platzer@tuwien.ac.at             //
 //                                                                            //
+// Additional contributions by:                                               //
+//                 Abdullah Allam - abdulal@stud.ntnu.no                      //
+//                                                                            //
 // Design Name:    CORE-V XIF eXtension Interface                             //
 // Project Name:   RI5CY                                                      //
 // Language:       SystemVerilog                                              //
@@ -64,7 +67,7 @@ interface cve2_if_xif
   typedef struct packed {
     logic           accept;         // Is the offloaded instruction (id) accepted by the coprocessor?
     writeregflags_t writeback;      // Will the coprocessor perform a writeback in the core to rd?
-    readregflags_t  register_read;  // Will the coprocessor perform require specific registers to be read?
+    readregflags_t  register_read;  // Will the coprocessor require specific registers to be read?
     logic           ecswrite ;      // Will the coprocessor write the Extension Context Status in mstatus?
   } x_issue_resp_t;
 
@@ -75,12 +78,12 @@ interface cve2_if_xif
   } x_commit_t;
 
   typedef struct packed {
-    hartid_t                hartid;             // Identification of the hart offloading the instruction.
-    id_t                    id;                 // Identification of the offloaded instruction. 
-    logic [X_RFR_WIDTH-1:0] rs [X_NUM_RS-1:0];  // Register file source operands for the offloaded instruction
-    readregflags_t          rs_valid;           // Validity of the register file source operand(s). If register pairs are supported, the validity is signaled for each register within the pair individually.
-    logic [5:0]             ecs;                // Extension Context Status ({mstatus.xs, mstatus.fs, mstatus.vs}).
-    logic                   ecs_valid;          // Validity of the Extension Context Status.
+    hartid_t                               hartid;    // Identification of the hart offloading the instruction.
+    id_t                                   id;        // Identification of the offloaded instruction. 
+    logic [X_RFR_WIDTH-1:0] [X_NUM_RS-1:0] rs;        // Register file source operands for the offloaded instruction
+    readregflags_t                         rs_valid;  // Validity of the register file source operand(s).
+    logic [5:0]                            ecs;       // Extension Context Status ({mstatus.xs, mstatus.fs, mstatus.vs}).
+    logic                                  ecs_valid; // Validity of the Extension Context Status.
   } x_register_t;
 
   typedef struct packed {
@@ -140,7 +143,7 @@ interface cve2_if_xif
     input  result
   );
 
-  // Port directions for extension
+  // Port directions for coprocessor
   modport coproc_issue (
     input  issue_valid,
     output issue_ready,

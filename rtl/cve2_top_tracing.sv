@@ -11,6 +11,7 @@ module cve2_top_tracing import cve2_pkg::*; #(
   parameter int unsigned MHPMCounterWidth = 40,
   parameter bit          RV32E            = 1'b0,
   parameter rv32m_e      RV32M            = RV32MFast,
+  parameter bit          XIF              = 1,
   parameter bit          BranchPredictor  = 1'b0,
   parameter int unsigned DmHaltAddr       = 32'h1A110800,
   parameter int unsigned DmExceptionAddr  = 32'h1A110808
@@ -56,6 +57,12 @@ module cve2_top_tracing import cve2_pkg::*; #(
   input  logic                         debug_req_i,
   output crash_dump_t                  crash_dump_o,
 
+  // eXtension interface
+  cve2_if_xif.cpu_issue     xif_issue_if,
+  cve2_if_xif.cpu_register  xif_register_if,
+  cve2_if_xif.cpu_commit    xif_commit_if,
+  cve2_if_xif.cpu_result    xif_result_if,
+
   // CPU Control Signals
   input  logic                         fetch_enable_i,
   output logic                         core_sleep_o
@@ -64,7 +71,7 @@ module cve2_top_tracing import cve2_pkg::*; #(
 
   // cve2_tracer relies on the signals from the RISC-V Formal Interface
   `ifndef RVFI
-    $fatal("Fatal error: RVFI needs to be defined globally.");
+    $fatal(1,"Fatal error: RVFI needs to be defined globally.");
   `endif
 
   logic        rvfi_valid;
@@ -112,7 +119,7 @@ module cve2_top_tracing import cve2_pkg::*; #(
     .MHPMCounterWidth ( MHPMCounterWidth ),
     .RV32E            ( RV32E            ),
     .RV32M            ( RV32M            ),
-    .BranchPredictor  ( BranchPredictor  ),
+    .XIF              ( XIF             ),
     .DmHaltAddr       ( DmHaltAddr       ),
     .DmExceptionAddr  ( DmExceptionAddr  )
   ) u_cve2_top (
@@ -150,6 +157,12 @@ module cve2_top_tracing import cve2_pkg::*; #(
 
     .debug_req_i,
     .crash_dump_o,
+
+    // eXtension interface
+    .xif_issue_if     (xif_issue_if),
+    .xif_register_if  (xif_register_if),
+    .xif_commit_if    (xif_commit_if),
+    .xif_result_if    (xif_result_if),
 
     .rvfi_valid,
     .rvfi_order,

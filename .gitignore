@@ -38,3 +38,6 @@ modelsim.ini
 # DVT
 *.log
 .dvt
+
+# Synth
+syn/dc

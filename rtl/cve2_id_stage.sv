@@ -799,7 +799,9 @@ module cve2_id_stage #(
     if (XIF) begin : gen_xif
 
       // Generate new instruction ID using a counter
-      logic [cve2_if_xif.X_ID_WIDTH-1 : 0] xif_id;
+      // TODO: get X_ID_WIDTH from the interface's value
+      localparam X_ID_WIDTH = 4;
+      logic [X_ID_WIDTH-1 : 0] xif_id;
       always_ff @(posedge clk_i, negedge rst_ni) begin
         if (rst_ni == 1'b0) begin
           xif_id <= '0;

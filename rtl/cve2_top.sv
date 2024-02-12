@@ -17,6 +17,7 @@ module cve2_top import cve2_pkg::*; #(
   parameter int unsigned MHPMCounterWidth = 40,
   parameter bit          RV32E            = 1'b0,
   parameter rv32m_e      RV32M            = RV32MFast,
+  parameter bit          XIF              = 1,
   parameter int unsigned DmHaltAddr       = 32'h1A110800,
   parameter int unsigned DmExceptionAddr  = 32'h1A110808
 ) (
@@ -59,6 +60,12 @@ module cve2_top import cve2_pkg::*; #(
   // Debug Interface
   input  logic                         debug_req_i,
   output crash_dump_t                  crash_dump_o,
+
+    // eXtension interface
+  cve2_if_xif.cpu_issue     xif_issue_if,
+  cve2_if_xif.cpu_register  xif_register_if,
+  cve2_if_xif.cpu_commit    xif_commit_if,
+  cve2_if_xif.cpu_result    xif_result_if,
 
   // RISC-V Formal Interface
   // Does not comply with the coding standards of _i/_o suffixes, but follows
@@ -158,6 +165,7 @@ module cve2_top import cve2_pkg::*; #(
     .RV32E            (RV32E),
     .RV32M            (RV32M),
     .RV32B            (RV32B),
+    .XIF              (XIF),
     .DbgTriggerEn     (DbgTriggerEn),
     .DbgHwBreakNum    (DbgHwBreakNum),
     .DmHaltAddr       (DmHaltAddr),
@@ -196,6 +204,12 @@ module cve2_top import cve2_pkg::*; #(
 
     .debug_req_i,
     .crash_dump_o,
+
+    // eXtension interface
+    .xif_issue_if     (xif_issue_if),
+    .xif_register_if  (xif_register_if),
+    .xif_commit_if    (xif_commit_if),
+    .xif_result_if    (xif_result_if),
 
 `ifdef RVFI
     .rvfi_valid,

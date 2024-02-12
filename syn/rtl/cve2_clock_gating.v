@@ -15,7 +15,7 @@ module cve2_clock_gate (
 
   always @* begin
     if (!clk_i) begin
-      en_latch = en_i | test_en_i;
+      en_latch = en_i | scan_cg_en_i;
     end
   end
   assign clk_o = en_latch & clk_i;

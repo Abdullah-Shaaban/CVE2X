@@ -21,6 +21,7 @@ module cve2_core import cve2_pkg::*; #(
   parameter bit          RV32E             = 1'b0,
   parameter rv32m_e      RV32M             = RV32MFast,
   parameter rv32b_e      RV32B             = RV32BNone,
+  parameter bit          XIF               = 1,
   parameter bit          DbgTriggerEn      = 1'b0,
   parameter int unsigned DbgHwBreakNum     = 1,
   parameter int unsigned DmHaltAddr        = 32'h1A110800,
@@ -67,6 +68,12 @@ module cve2_core import cve2_pkg::*; #(
   output crash_dump_t                  crash_dump_o,
   // SEC_CM: EXCEPTION.CTRL_FLOW.LOCAL_ESC
   // SEC_CM: EXCEPTION.CTRL_FLOW.GLOBAL_ESC
+
+  // eXtension interface
+  cve2_if_xif.cpu_issue     xif_issue_if,
+  cve2_if_xif.cpu_register  xif_register_if,
+  cve2_if_xif.cpu_commit    xif_commit_if,
+  cve2_if_xif.cpu_result    xif_result_if,
 
   // RISC-V Formal Interface
   // Does not comply with the coding standards of _i/_o suffixes, but follows
@@ -353,7 +360,8 @@ module cve2_core import cve2_pkg::*; #(
   cve2_id_stage #(
     .RV32E          (RV32E),
     .RV32M          (RV32M),
-    .RV32B          (RV32B)
+    .RV32B          (RV32B),
+    .XIF            (XIF)
   ) id_stage_i (
     .clk_i (clk_i),
     .rst_ni(rst_ni),
@@ -478,7 +486,13 @@ module cve2_core import cve2_pkg::*; #(
     .perf_dside_wait_o(perf_dside_wait),
     .perf_wfi_wait_o  (perf_wfi_wait),
     .perf_div_wait_o  (perf_div_wait),
-    .instr_id_done_o  (instr_id_done)
+    .instr_id_done_o  (instr_id_done),
+
+    // eXtension interface
+    .xif_issue_if     (xif_issue_if),
+    .xif_register_if  (xif_register_if),
+    .xif_commit_if    (xif_commit_if),
+    .xif_result_if    (xif_result_if)
   );
 
   // for RVFI only
