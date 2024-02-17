@@ -251,11 +251,20 @@ module cve2_id_stage #(
   logic [31:0] alu_operand_b;
 
   // eXtension interface signals
+  // Wait (in the FIRST_CYCLE state) until the co-processor accept/reject the offloaded instruction.
   logic xif_resp_wait;
   logic xif_insn_accepted;
-  logic xif_wb_wait;
+  // Wait if co-processor needs to write back a result. Used to enter MULTI_CYCLE state. Note that the
+  // registered version is used whenever the control logic includes xif_insn_done (because it masks the wait).
+  logic xif_wb_wait_d, xif_wb_wait_q;
+  // Indicate an offloaded instruction finished. Used to stop waiting for co-processor.
   logic xif_insn_done;
+  // Indicate the co-processor wants to write back a result.
+  logic xif_wb_en;
+  // Indicate an illegal instruction if the co-processor rejects issue transaction. Used to mask illegal_insn_dec 
+  // and illegal_csr_insn_i to "attempt" offloading the instruction to the co-processor first.
   logic xif_illegal_insn;
+  // xif_stall stalls the pipeline if we are waiting for the coprocessor to respond or to write-back
   logic xif_stall;
 
   /////////////
@@ -334,16 +343,20 @@ module cve2_id_stage #(
   ///////////////////////
 
   // Suppress register write if there is an illegal CSR access or instruction is not executing
-  assign rf_we_id_o = rf_we_raw & instr_executing & ~illegal_csr_insn_i;
+  assign rf_we_id_o = rf_we_raw & instr_executing & ~(illegal_csr_insn_i && xif_illegal_insn);
 
   // Register file write data mux
   always_comb begin : rf_wdata_id_mux
-    unique case (rf_wdata_sel)
-      RF_WD_EX:  rf_wdata_id_o = xif_insn_done? xif_result_if.result.data : result_ex_i; // TODO: change rf_wdata_sel instead of a 2nd MUX
-                                                                                         // TODO: xif_insn_done comes from XIF directly, which can limit timing
-      RF_WD_CSR: rf_wdata_id_o = csr_rdata_i;
-      default:   rf_wdata_id_o = result_ex_i;
-    endcase
+    // TODO: change rf_wdata_sel instead of a 2nd layer of MUXing. Also, xif_wb_en comes from XIF directly, which can limit timing.
+    if (xif_wb_en) begin
+      rf_wdata_id_o = xif_result_if.result.data;
+    end else begin
+      unique case (rf_wdata_sel)
+        RF_WD_EX:  rf_wdata_id_o = result_ex_i;
+        RF_WD_CSR: rf_wdata_id_o = csr_rdata_i;
+        default:   rf_wdata_id_o = result_ex_i;
+      endcase
+    end
   end
 
   /////////////
@@ -458,7 +471,7 @@ module cve2_id_stage #(
   // Controller //
   ////////////////
 
-  assign illegal_insn_o = instr_valid_i & ((illegal_insn_dec && xif_illegal_insn) | illegal_csr_insn_i);
+  assign illegal_insn_o = instr_valid_i & ((illegal_insn_dec || illegal_csr_insn_i) && xif_illegal_insn);
 
   cve2_controller #(
   ) controller_i (
@@ -690,8 +703,10 @@ module cve2_id_stage #(
               rf_we_raw     = 1'b0;
             end
             default: begin
-              // Enter MULTI_CYCLE state if we are waiting for the co-processor to write-back
-              if (xif_wb_wait) begin
+              if (xif_wb_en) begin
+                rf_we_raw  = 1'b1;
+              end
+              if (xif_wb_wait_d) begin
                 id_fsm_d = MULTI_CYCLE;
               end else begin
                 id_fsm_d = FIRST_CYCLE;
@@ -705,10 +720,9 @@ module cve2_id_stage #(
             rf_we_raw       = rf_we_dec & ex_valid_i;
           end
 
-          // TODO: xif_wb_wait stays HIGH 1 extra cycle because of ORing xif_wb_wait_q. Find a better approach
           // TODO: xif_insn_done comes from XIF directly, which can limit timing
-          if(xif_wb_wait) begin
-            rf_we_raw       = xif_insn_done;
+          if(xif_wb_wait_q) begin
+            rf_we_raw       = xif_wb_en;
           end
 
           if (multicycle_done) begin
@@ -750,8 +764,8 @@ module cve2_id_stage #(
   // Used by ALU to access RS3 if ternary instruction.
   assign instr_first_cycle_id_o = instr_first_cycle;
 
-    assign multicycle_done = lsu_req_dec ? lsu_resp_valid_i : 
-                             (xif_wb_wait ? xif_insn_done : ex_valid_i);
+    assign multicycle_done = lsu_req_dec ? lsu_resp_valid_i :
+                             (xif_wb_wait_q ? xif_insn_done : ex_valid_i);
 
     assign data_req_allowed = instr_first_cycle;
 
@@ -782,8 +796,9 @@ module cve2_id_stage #(
 
   // Signal which instructions to count as retired in minstret, all traps along with ebrk and
   // ecall instructions are not counted.
-  assign instr_perf_count_id_o = ~ebrk_insn & ~ecall_insn_dec & ~illegal_insn_dec &
-      ~illegal_csr_insn_i & ~instr_fetch_err_i;
+  assign instr_perf_count_id_o = ~ebrk_insn & ~ecall_insn_dec & 
+      ~((illegal_insn_dec | illegal_csr_insn_i) && xif_illegal_insn) & 
+      ~instr_fetch_err_i;
 
   // An instruction is ready to move to the writeback
   assign en_wb_o = instr_done;
@@ -814,13 +829,13 @@ module cve2_id_stage #(
       end
 
       // The Issue Interface:
-        // Attempt to offload every valid instruction that is considered illegal by the decoder
+        // Attempt to offload every valid instruction that is considered illegal by the decoder or CSR module
         // We bring issue_valid LOW when we stall while waiting for co-processor to write-back 
         // (we're not offloading until we finish) by entering the MULTI_CYCLE state.
         // We keep issue_valid HIGH when we stall while waiting for co-processor to respond by
         // staying in the FIRST_CYCLE state.
         // TODO: for RV32E, we need to make sure the instruction accesses a valid GPR (less than 16) before doing the handshake.
-      assign xif_issue_if.issue_valid      = instr_valid_i && illegal_insn_dec && (id_fsm_q == FIRST_CYCLE);
+      assign xif_issue_if.issue_valid      = instr_valid_i && (illegal_insn_dec || illegal_csr_insn_i) && (id_fsm_q == FIRST_CYCLE);
       assign xif_issue_if.issue_req.instr  = instr_rdata_i;
       assign xif_issue_if.issue_req.id     = xif_id;
       assign xif_issue_if.issue_req.hartid = '0; // TODO: connect to hart_id_i from cve2_core?
@@ -848,31 +863,20 @@ module cve2_id_stage #(
 
       // Result Interface:
         // We are ready for a result whenever we're waiting for a valid, offloaded instruction
-        // TODO: xif_wb_wait stays HIGH 1 extra cycle because of ORing xif_wb_wait_q. Is this a problem? 
-      assign xif_result_if.result_ready = instr_valid_i && (xif_resp_wait || xif_wb_wait);
+      assign xif_result_if.result_ready = instr_valid_i && (illegal_insn_dec || illegal_csr_insn_i);
 
       // Control logic:
-        // xif_resp_wait is used to wait in the FIRST_CYCLE state until the co-processor accept/reject the instruction
-        // xif_wb_wait is used to enter MULTI_CYCLE state if co-processor needs to write back a result. It is also used
-        // to keep pipeline stalled until the co-processor finishes.
-        // xif_insn_done is used to stop waiting in the MULTI_CYCLE state, and we do so whenever a Result handshake is done
-        // xif_illegal_insn is kept LOW until the co-processor responds, and it goes HIGH if the instruction is rejected
-        // xif_stall stalls the pipeline if we are waiting for the coprocessor to respond or to write-back
-      logic xif_wb_wait_q;
       always_ff @(posedge clk_i, negedge rst_ni) begin
-        if (rst_ni == 1'b0) xif_wb_wait_q <= '0;
-        else begin
-          if (xif_insn_done) xif_wb_wait_q <= 0;
-          else if (xif_wb_wait) xif_wb_wait_q <= 1; 
-        end
+        if (rst_ni == 1'b0) xif_wb_wait_q <= 1'b0;
+        else xif_wb_wait_q <= xif_wb_wait_d; 
       end
       assign xif_resp_wait     = xif_issue_if.issue_valid && !xif_issue_if.issue_ready;
       assign xif_insn_accepted = xif_issue_if.issue_valid && xif_issue_if.issue_ready && xif_issue_if.issue_resp.accept;
       assign xif_insn_done     = xif_result_if.result_ready && xif_result_if.result_valid;
-      assign xif_wb_wait       = (xif_insn_accepted && xif_issue_if.issue_resp.writeback) || xif_wb_wait_q;
-      assign xif_illegal_insn  = !xif_insn_accepted && !xif_resp_wait;
-      // TODO: xif_insn_done is used to mask xif_wb_wait because it stays HIGH 1 extra cycle because of ORing xif_wb_wait_q. Find a better approach
-      assign xif_stall         = (xif_wb_wait && xif_insn_done) || xif_resp_wait;
+      assign xif_wb_wait_d     = ((xif_insn_accepted && xif_issue_if.issue_resp.writeback) || xif_wb_wait_q) && !xif_insn_done;
+      assign xif_illegal_insn  = xif_issue_if.issue_valid && xif_issue_if.issue_ready && !xif_issue_if.issue_resp.accept;
+      assign xif_wb_en         = xif_insn_done && xif_result_if.result.we;
+      assign xif_stall         = xif_wb_wait_d || xif_resp_wait;
               
 
     end else begin : no_xif
@@ -890,8 +894,10 @@ module cve2_id_stage #(
         // When the eXtension interface is disabled, we don't mask illegal_insn_dec
       assign xif_resp_wait     = 0;
       assign xif_insn_accepted = 0;
-      assign xif_wb_wait       = 0;
+      assign xif_wb_wait_d     = 0;
+      assign xif_wb_wait_q     = 0;
       assign xif_insn_done     = 0;
+      assign xif_wb_en         = 0;
       assign xif_illegal_insn  = 1;
       assign xif_stall         = 0;
     end
