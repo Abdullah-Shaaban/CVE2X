@@ -70,10 +70,10 @@ module cve2_core import cve2_pkg::*; #(
   // SEC_CM: EXCEPTION.CTRL_FLOW.GLOBAL_ESC
 
   // eXtension interface
-  cve2_if_xif.cpu_issue     xif_issue_if,
-  cve2_if_xif.cpu_register  xif_register_if,
-  cve2_if_xif.cpu_commit    xif_commit_if,
-  cve2_if_xif.cpu_result    xif_result_if,
+  if_xif_issue.cpu_issue     xif_issue_if,
+  if_xif_register.cpu_register  xif_register_if,
+  if_xif_commit.cpu_commit    xif_commit_if,
+  if_xif_result.cpu_result    xif_result_if,
 
   // RISC-V Formal Interface
   // Does not comply with the coding standards of _i/_o suffixes, but follows

@@ -58,10 +58,10 @@ module cve2_top_tracing import cve2_pkg::*; #(
   output crash_dump_t                  crash_dump_o,
 
   // eXtension interface
-  cve2_if_xif.cpu_issue     xif_issue_if,
-  cve2_if_xif.cpu_register  xif_register_if,
-  cve2_if_xif.cpu_commit    xif_commit_if,
-  cve2_if_xif.cpu_result    xif_result_if,
+  if_xif_issue.cpu_issue     xif_issue_if,
+  if_xif_register.cpu_register  xif_register_if,
+  if_xif_commit.cpu_commit    xif_commit_if,
+  if_xif_result.cpu_result    xif_result_if,
 
   // CPU Control Signals
   input  logic                         fetch_enable_i,
@@ -159,10 +159,10 @@ module cve2_top_tracing import cve2_pkg::*; #(
     .crash_dump_o,
 
     // eXtension interface
-    .xif_issue_if     (xif_issue_if),
-    .xif_register_if  (xif_register_if),
-    .xif_commit_if    (xif_commit_if),
-    .xif_result_if    (xif_result_if),
+    .if_xif_issue     (xif_issue_if),
+    .if_xif_register  (xif_register_if),
+    .if_xif_commit    (xif_commit_if),
+    .if_xif_result    (xif_result_if),
 
     .rvfi_valid,
     .rvfi_order,

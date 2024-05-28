@@ -154,10 +154,10 @@ module cve2_id_stage #(
   output logic                      instr_id_done_o,
 
   // eXtension interface
-  cve2_if_xif.cpu_issue     xif_issue_if,
-  cve2_if_xif.cpu_register  xif_register_if,
-  cve2_if_xif.cpu_commit    xif_commit_if,
-  cve2_if_xif.cpu_result    xif_result_if
+  if_xif_issue.cpu_issue     xif_issue_if,
+  if_xif_register.cpu_register  xif_register_if,
+  if_xif_commit.cpu_commit    xif_commit_if,
+  if_xif_result.cpu_result    xif_result_if
 );
 
   import cve2_pkg::*;
